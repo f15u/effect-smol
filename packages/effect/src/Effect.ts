@@ -1216,6 +1216,11 @@ export {
  *
  * Use `Effect.callback` when dealing with APIs that use callback-style instead of
  * `async/await` or `Promise`.
+ * * **Previously Known As**
+ *
+ * This API replaces the following from Effect 3.x:
+ *
+ * - `Effect.async`
  *
  * @example
  * ```ts
