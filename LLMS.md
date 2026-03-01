@@ -230,6 +230,9 @@ They let you model finite or infinite data sources.
   - `Stream.callback` for any callback-based API
   - `NodeStream.fromReadable` for Node.js readable streams
 - **[Consuming and transforming streams](./ai-docs/src/02_stream/20_consuming-streams.ts)**: How to transform and consume streams using operators like `map`, `flatMap`, `filter`, `mapEffect`, and various `run*` methods.
+- **[Decoding and encoding streams](./ai-docs/src/02_stream/30_encoding.ts)**:
+  Use `Stream.pipeThroughChannel` with the `Ndjson` & `Msgpack` modules to
+  decode and encode streams of structured data.
 
 ## Integrating Effect into existing applications
 
@@ -306,6 +309,12 @@ responses.
 - **[Using LanguageModel for text, objects, and streams](./ai-docs/src/71_ai/10_language-model.ts)**:
   Configure a provider once, then use `LanguageModel` for plain text
   generation, schema-validated object generation, and streaming responses.
+- **[Defining and using AI tools](./ai-docs/src/71_ai/20_tools.ts)**:
+  Define tools with schemas, group them into toolkits, implement handlers,
+  and pass them to `LanguageModel.generateText`.
+- **[Stateful chat sessions](./ai-docs/src/71_ai/30_chat.ts)**:
+  The AI `Chat` module maintains conversation history automatically. Build
+  AI agents or chat assistants.
 
 ## Building distributed applications with cluster
 
