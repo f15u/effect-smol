@@ -24,80 +24,13 @@ export function fromASTs(asts: readonly [AST.AST, ...Array<AST.AST>]): SchemaRep
 
   const referenceMap = new Map<AST.AST, string>()
   const uniqueReferences = new Set<string>()
-  const usedReferences = new Set<string>()
+  const visiting = new Set<AST.AST>()
 
   const schemas = Arr.map(asts, (ast) => recur(ast))
 
   return {
-    representations: Arr.map(schemas, compact),
-    references: Rec.map(Rec.filter(references, (_, k) => !isCompactable(k)), compact)
-  }
-
-  function isCompactable($ref: string): boolean {
-    return !usedReferences.has($ref)
-  }
-
-  function compact(s: SchemaRepresentation.Representation): SchemaRepresentation.Representation {
-    switch (s._tag) {
-      default:
-        return s
-      case "Declaration":
-        return {
-          ...s,
-          typeParameters: s.typeParameters.map(compact),
-          encodedSchema: compact(s.encodedSchema)
-        }
-      case "Reference": {
-        if (isCompactable(s.$ref)) {
-          return compact(references[s.$ref])
-        }
-        return s
-      }
-      case "Suspend":
-        return { ...s, thunk: compact(s.thunk) }
-      case "String":
-        return {
-          ...s,
-          ...(s.contentSchema ? { contentSchema: compact(s.contentSchema) } : undefined)
-        }
-      case "TemplateLiteral":
-        return { ...s, parts: s.parts.map(compact) }
-      case "Arrays":
-        return {
-          ...s,
-          elements: s.elements.map((e) => ({ ...e, type: compact(e.type) })),
-          rest: s.rest.map(compact)
-        }
-      case "Objects":
-        return {
-          ...s,
-          checks: s.checks.map(compactCheck),
-          propertySignatures: s.propertySignatures.map((ps) => ({ ...ps, type: compact(ps.type) })),
-          indexSignatures: s.indexSignatures.map((is) => ({
-            ...is,
-            parameter: compact(is.parameter),
-            type: compact(is.type)
-          }))
-        }
-      case "Union":
-        return { ...s, types: s.types.map(compact) }
-    }
-  }
-
-  function compactCheck<M extends SchemaRepresentation.Meta>(
-    check: SchemaRepresentation.Check<M>
-  ): SchemaRepresentation.Check<M> {
-    switch (check._tag) {
-      case "Filter":
-        return {
-          ...check,
-          meta: check.meta._tag === "isPropertyNames"
-            ? { _tag: "isPropertyNames", propertyNames: compact(check.meta.propertyNames) } as M
-            : check.meta
-        }
-      case "FilterGroup":
-        return { ...check, checks: Arr.map(check.checks, compactCheck) }
-    }
+    representations: schemas,
+    references
   }
 
   function gen(prefix: string = "_"): string {
@@ -115,32 +48,45 @@ export function fromASTs(asts: readonly [AST.AST, ...Array<AST.AST>]): SchemaRep
   function recur(ast: AST.AST, prefix?: string): SchemaRepresentation.Representation {
     const found = referenceMap.get(ast)
     if (found !== undefined) {
-      usedReferences.add(found)
       return { _tag: "Reference", $ref: found }
     }
 
-    const last = getLastEncoding(ast)
+    const last = AST.getLastEncoding(ast)
+    const identifier = InternalAnnotations.resolveIdentifier(ast) ?? prefix
 
-    if (ast === last) {
-      const reference = ast._tag === "Declaration"
-        ? gen(ast._tag)
-        : gen(InternalAnnotations.resolveIdentifier(ast) ?? prefix ?? `${ast._tag}_`)
+    if (ast !== last) {
+      return recur(last, identifier)
+    }
 
-      const encodedSchemaPrefix = ast._tag === "Declaration"
-        ? InternalAnnotations.resolveIdentifier(ast) ?? prefix
-        : prefix
-
+    // Has identifier → always create reference
+    if (identifier !== undefined) {
+      const reference = gen(identifier)
       referenceMap.set(ast, reference)
-      const out = on(ast, encodedSchemaPrefix)
+      const out = on(ast)
       references[reference] = out
       return { _tag: "Reference", $ref: reference }
-    } else {
-      return recur(last, InternalAnnotations.resolveIdentifier(ast) ?? prefix)
     }
-  }
 
-  function getLastEncoding(ast: AST.AST): AST.AST {
-    return ast.encoding ? ast.encoding[ast.encoding.length - 1].to : ast
+    // Recursion detected → create reference
+    if (visiting.has(ast)) {
+      const reference = gen(`${ast._tag}_`)
+      referenceMap.set(ast, reference)
+      return { _tag: "Reference", $ref: reference }
+    }
+
+    // Normal case → inline
+    visiting.add(ast)
+    const out = on(ast)
+    visiting.delete(ast)
+
+    // A descendant triggered reference creation (recursion)
+    const ref = referenceMap.get(ast)
+    if (ref !== undefined) {
+      references[ref] = out
+      return { _tag: "Reference", $ref: ref }
+    }
+
+    return out
   }
 
   function getEncodedSchema(last: AST.Declaration): AST.AST {
@@ -153,12 +99,12 @@ export function fromASTs(asts: readonly [AST.AST, ...Array<AST.AST>]): SchemaRep
     return AST.null
   }
 
-  function on(last: AST.AST, encodedSchemaPrefix?: string): SchemaRepresentation.Representation {
+  function on(last: AST.AST): SchemaRepresentation.Representation {
     const annotations = fromASTAnnotations(last.annotations)
     switch (last._tag) {
       case "Declaration": {
         // this must be executed before transforming the type parameters
-        const encodedSchema = recur(getEncodedSchema(last), encodedSchemaPrefix)
+        const encodedSchema = recur(getEncodedSchema(last))
         return {
           _tag: "Declaration",
           typeParameters: last.typeParameters.map((ast) => recur(ast)),
@@ -228,7 +174,7 @@ export function fromASTs(asts: readonly [AST.AST, ...Array<AST.AST>]): SchemaRep
         return {
           _tag: last._tag,
           elements: last.elements.map((e) => {
-            const last = getLastEncoding(e)
+            const last = AST.getLastEncoding(e)
             return {
               isOptional: AST.isOptional(last),
               type: recur(e),
@@ -243,7 +189,7 @@ export function fromASTs(asts: readonly [AST.AST, ...Array<AST.AST>]): SchemaRep
         return {
           _tag: last._tag,
           propertySignatures: last.propertySignatures.map((ps) => {
-            const last = getLastEncoding(ps.type)
+            const last = AST.getLastEncoding(ps.type)
             return {
               name: ps.name,
               type: recur(ps.type),
