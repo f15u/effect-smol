@@ -36,7 +36,7 @@ export class Users extends ServiceMap.Service<Users, {
         [3, new User({ id: 3, name: "Grace Hopper", email: "grace@acme.dev" })]
       ])
 
-      const resolver = yield* RequestResolver.make<GetUserById>(Effect.fnUntraced(function*(entries) {
+      const resolver = yield* RequestResolver.make<GetUserById>(Effect.fn(function*(entries) {
         for (const entry of entries) {
           const user = usersTable.get(entry.request.id)
 

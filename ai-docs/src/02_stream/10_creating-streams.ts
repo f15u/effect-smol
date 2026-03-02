@@ -34,7 +34,7 @@ export const samples = Stream.fromEffectSchedule(
 // cursor.
 export const fetchJobsPage = Stream.paginate(
   0, // start with page 0 (the cursor)
-  Effect.fnUntraced(function*(page) {
+  Effect.fn(function*(page) {
     // Simulate network latency
     yield* Effect.sleep("50 millis")
 
@@ -74,7 +74,7 @@ export const events = Stream.fromEventListener<PointerEvent>(button, "click")
 
 // You can also use `Stream.callback` to create a stream from any callback-based
 // API.
-export const callbackStream = Stream.callback<PointerEvent>(Effect.fnUntraced(function*(queue) {
+export const callbackStream = Stream.callback<PointerEvent>(Effect.fn(function*(queue) {
   // You can use the `Queue` apis to emit values into the stream from the
   // callback.
   function onEvent(event: PointerEvent) {

@@ -39,7 +39,7 @@ const create = Command.make(
       Flag.withDefault("normal")
     )
   },
-  Effect.fnUntraced(function*({ title, priority }) {
+  Effect.fn(function*({ title, priority }) {
     // Subcommands can read parent command input by yielding the parent command.
     const root = yield* tasks
 
@@ -70,7 +70,7 @@ const list = Command.make(
       Flag.withDescription("Print machine-readable output")
     )
   },
-  Effect.fnUntraced(function*({ status, json }) {
+  Effect.fn(function*({ status, json }) {
     const root = yield* tasks
     const items = [
       { title: "Ship 4.0", status: "open" },
